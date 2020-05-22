@@ -2,6 +2,7 @@
 
 library(optparse)
 library(Matrix)
+suppressMessages(library(scater))
 suppressMessages(library(SingleCellExperiment))
 
 
@@ -11,9 +12,9 @@ make_SCE <- function(counts, rowData, colData) {
     colData <- read.csv(colData)
     counts <- as.matrix(read.csv(counts, row.names=1, check.names=F))
 
-    # Index by spot and gene ID
+    # Index by spot and gene name
 	rownames(colData) <- colData$spot
-	rownames(rowData) <- rowData$gene_name
+	rownames(rowData) <- uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
 
     # Make count matrix sparse
 	counts <- as(counts, "dgCMatrix")

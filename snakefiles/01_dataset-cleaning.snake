@@ -8,9 +8,4 @@ subworkflow thrane:
 
 rule all:
     input:
-        thrane('data/raw/thrane/ST_mel1_rep1_counts.tsv'),
-        thrane('data/cleaned/thrane/ST_mel1_rep1.rowData.csv'),
-        thrane('data/cleaned/thrane/ST_mel1_rep1.colData.csv'),
-        thrane('data/cleaned/thrane/ST_mel1_rep1.counts.csv.gz'),
-        thrane('data/cleaned/thrane/ST_mel1_rep1.rds'),
         thrane('data/cleaned/thrane.rds')

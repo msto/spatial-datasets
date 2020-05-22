@@ -13,7 +13,7 @@ make_SCE <- function(counts, rowData, colData) {
 
     # Index by spot and gene ID
 	rownames(colData) <- colData$spot
-	rownames(rowData) <- rowData$gene_id
+	rownames(rowData) <- rowData$gene_name
 
     # Make count matrix sparse
 	counts <- as(counts, "dgCMatrix")

@@ -52,3 +52,15 @@ rule make_RDS:
             --sample {wildcards.sample} \
             {input.counts} {input.rowData} {input.colData} {output.rds}
         """
+
+rule combine_RDS:
+    input:
+        expand('data/cleaned/thrane/{sample}.rds', sample=config['samples'])
+    output:
+        samples=temp('data/cleaned/thrane/samples.txt'),
+        rds='data/cleaned/thrane.rds'
+    shell:
+        """
+        echo {config[samples]} | sed -e 's/ /\\n/g' > {output.samples};
+        ./scripts/thrane/combine_RDS.R {output.samples} {output.rds}
+        """

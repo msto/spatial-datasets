@@ -1,6 +1,4 @@
 
-#include: '01_dataset-cleaning/thrane.snake'
-
 subworkflow thrane:
     snakefile: "01_dataset-cleaning/thrane.snake"
     workdir: ".."

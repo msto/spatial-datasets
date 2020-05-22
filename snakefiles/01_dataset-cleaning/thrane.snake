@@ -23,7 +23,7 @@ rule make_data:
     input:
         'data/raw/thrane/{sample}_counts.tsv'
     output:
-        'data/cleaned/thrane/{sample}.{data}.csv'
+        temp('data/cleaned/thrane/{sample}.{data}.csv')
     shell:
         """
         ./scripts/thrane/make_{wildcards.data}.sh {input} {output}
@@ -33,7 +33,7 @@ rule make_counts:
     input:
         'data/raw/thrane/{sample}_counts.tsv'
     output:
-        'data/cleaned/thrane/{sample}.counts.csv.gz'
+        temp('data/cleaned/thrane/{sample}.counts.csv.gz')
     shell:
         """
         ./scripts/thrane/make_counts.sh {input} {output}

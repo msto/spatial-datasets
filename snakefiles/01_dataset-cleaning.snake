@@ -1,0 +1,9 @@
+
+subworkflow thrane:
+    snakefile: "01_dataset-cleaning/thrane.snake"
+    workdir: ".."
+    configfile: "snakefiles/01_dataset-cleaning/thrane.yaml"
+
+rule all:
+    input:
+        thrane('data/cleaned/thrane.rds')

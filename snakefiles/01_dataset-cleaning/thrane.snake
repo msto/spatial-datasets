@@ -1,0 +1,66 @@
+
+rule download:
+    output:
+        "data/raw/thrane/ST-Melanoma-Datasets_1.zip"
+    shell:
+        """
+        curl -o {output} https://www.spatialresearch.org/wp-content/uploads/2019/03/ST-Melanoma-Datasets_1.zip
+        """
+
+rule decompress:
+    input:
+        "data/raw/thrane/ST-Melanoma-Datasets_1.zip"
+    output:
+        [f"data/raw/thrane/{sample}_counts.tsv" for sample in config['samples']]
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        unzip -d {params.outdir} {input}
+        """
+
+rule make_data:
+    input:
+        'data/raw/thrane/{sample}_counts.tsv'
+    output:
+        temp('data/cleaned/thrane/{sample}.{data}.csv')
+    shell:
+        """
+        ./scripts/thrane/make_{wildcards.data}.sh {input} {output}
+        """
+
+rule make_counts:
+    input:
+        'data/raw/thrane/{sample}_counts.tsv'
+    output:
+        temp('data/cleaned/thrane/{sample}.counts.csv.gz')
+    shell:
+        """
+        ./scripts/thrane/make_counts.sh {input} {output}
+        """
+
+rule make_RDS:
+    input:
+        counts='data/cleaned/thrane/{sample}.counts.csv.gz',
+        rowData='data/cleaned/thrane/{sample}.rowData.csv',
+        colData='data/cleaned/thrane/{sample}.colData.csv'
+    output:
+        rds='data/cleaned/thrane/{sample}.rds'
+    shell:
+        """
+        ./scripts/thrane/make_RDS.R \
+            --sample {wildcards.sample} \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """
+
+rule combine_RDS:
+    input:
+        expand('data/cleaned/thrane/{sample}.rds', sample=config['samples'])
+    output:
+        samples=temp('data/cleaned/thrane/samples.txt'),
+        rds='data/cleaned/thrane.rds'
+    shell:
+        """
+        echo {config[samples]} | sed -e 's/ /\\n/g' > {output.samples};
+        ./scripts/thrane/combine_RDS.R {output.samples} {output.rds}
+        """

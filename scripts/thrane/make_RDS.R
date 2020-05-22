@@ -42,6 +42,8 @@ main <- function() {
         colData(sce)$sample <- options$sample
     }
 
+    sce <- scater::logNormCounts(sce)
+
     saveRDS(sce, args[[4]])
 }
 

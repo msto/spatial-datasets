@@ -1,0 +1,14 @@
+
+#include: '01_dataset-cleaning/thrane.snake'
+
+subworkflow thrane:
+    snakefile: "01_dataset-cleaning/thrane.snake"
+    workdir: ".."
+    configfile: "snakefiles/01_dataset-cleaning/thrane.yaml"
+
+rule all:
+    input:
+        thrane('data/raw/thrane/ST_mel1_rep1_counts.tsv'),
+        thrane('data/cleaned/thrane/ST_mel1_rep1.rowData.csv'),
+        thrane('data/cleaned/thrane/ST_mel1_rep1.colData.csv'),
+        thrane('data/cleaned/thrane/ST_mel1_rep1.counts.csv.gz')

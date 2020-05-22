@@ -12,7 +12,6 @@ rule decompress:
         "data/raw/thrane/ST-Melanoma-Datasets_1.zip"
     output:
         [f"data/raw/thrane/{sample}_counts.tsv" for sample in config['samples']]
-        #[f"data/raw/thrane/{sample}_counts.tsv" for sample in ['a', 'b', 'c']]
     params:
         outdir=lambda wildcards, input: os.path.dirname(input[0])
     shell:
@@ -38,4 +37,18 @@ rule make_counts:
     shell:
         """
         ./scripts/thrane/make_counts.sh {input} {output}
+        """
+
+rule make_RDS:
+    input:
+        counts='data/cleaned/thrane/{sample}.counts.csv.gz',
+        rowData='data/cleaned/thrane/{sample}.rowData.csv',
+        colData='data/cleaned/thrane/{sample}.colData.csv'
+    output:
+        rds='data/cleaned/thrane/{sample}.rds'
+    shell:
+        """
+        ./scripts/thrane/make_RDS.R \
+            --sample {wildcards.sample} \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
         """

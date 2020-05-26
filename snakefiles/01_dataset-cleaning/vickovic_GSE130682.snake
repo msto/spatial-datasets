@@ -1,0 +1,67 @@
+
+# NOTE: GEO doesn't include binned counts
+# TODO: figure out how to reliably script download of data from single cell portal
+# Current instructions: 
+#   1) visit https://singlecell.broadinstitute.org/single_cell/study/SCP420/hdst#/
+#   2) use "bulk download" button in top right, and copy ONLY the config download cmd
+#   3) edit config file to remove instructions to download fastq files
+#   4) download the rest using `curl -K cfg.txt`
+
+rule download:
+    output:
+        "data/raw/vickovic_GSE130682/GSE130682_RAW.tar"
+    shell:
+        """
+        curl -o {output} ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE130nnn/GSE130682/suppl/GSE130682_RAW.tar
+        """
+
+rule decompress:
+    input:
+        "data/raw/vickovic_GSE130682/GSE130682_RAW.tar"
+    output:
+        [f"data/raw/vickovic_GSE130682/{sample}_filtered_red_ut.tsv.gz" for sample in config['samples']]
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        tar -C {params.outdir} -xf {input}
+        """
+
+rule make_data:
+    input:
+        "data/raw/vickovic_GSE130682/{sample}_filtered_red_ut.tsv.gz"
+    output:
+        counts='data/cleaned/vickovic_GSE130682/{sample}.counts.csv.gz',
+        rowData='data/cleaned/vickovic_GSE130682/{sample}.rowData.csv',
+        colData='data/cleaned/vickovic_GSE130682/{sample}.colData.csv',
+    shell:
+        """
+        ./scripts/vickovic_GSE130682/make_data.py \
+            {input} {output.counts} {output.rowData} {output.colData}
+        """
+
+rule make_RDS:
+    input:
+        counts='data/cleaned/thrane/{sample}.counts.csv.gz',
+        rowData='data/cleaned/thrane/{sample}.rowData.csv',
+        colData='data/cleaned/thrane/{sample}.colData.csv'
+    output:
+        rds='data/cleaned/thrane/{sample}.rds'
+    shell:
+        """
+        ./scripts/thrane/make_RDS.R \
+            --sample {wildcards.sample} \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """
+
+rule combine_RDS:
+    input:
+        expand('data/cleaned/thrane/{sample}.rds', sample=config['samples'])
+    output:
+        samples=temp('data/cleaned/thrane/samples.txt'),
+        rds='data/cleaned/thrane.rds'
+    shell:
+        """
+        echo {config[samples]} | sed -e 's/ /\\n/g' > {output.samples};
+        ./scripts/thrane/combine_RDS.R {output.samples} {output.rds}
+        """

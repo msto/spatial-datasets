@@ -13,15 +13,47 @@ Process HDST counts from Vickovic et al (20190
 """
 
 import argparse
+import numpy as np
 import pandas as pd
 
 
-def make_counts(df):
-    counts = df[['gene', 'bc', 'count']]
-    counts = counts.pivot_table(index='gene', columns='bc', 
-                                values='count', fill_value=0)
+def assign_indices(xs, key=None):
+    xs = sorted(set(xs), key=key)
+    return {x: i for i, x in enumerate(xs)}
 
-    return counts
+
+def spot_sort_key(spot):
+    row, col = spot.split('x')
+    return (int(row), int(col))
+
+
+def make_counts(df, fname):
+    # "pivot table" by hand b/c of overflow error when trying to use pd/tidyr
+
+    # Map gene and spot names to indices
+    gene_idx = assign_indices(df['gene'])
+    spot_idx = assign_indices(df['bc'], key=spot_sort_key)
+
+    # Make empty count matrix
+    n_genes = len(gene_idx.keys())
+    n_spots = len(spot_idx.keys())
+    counts = np.zeros((n_genes, n_spots))
+
+    # Add each count in file to corresponding matrix entry
+    with open(fname) as countfile:
+        # skip header
+        next(countfile)
+
+        for line in countfile:
+            spot, px, py, gene, count = line.strip().split()
+            counts[gene_idx[gene], spot_idx[spot]] = int(count)
+
+    # Cast to DataFrame with gene/spot names
+    genes = sorted(set(df['gene']))
+    spots = sorted(set(df['bc']), key=spot_sort_key)
+    count_df = pd.DataFrame(counts, index=genes, columns=spots, dtype=int)
+
+    return count_df
 
 
 def make_rowData(df, counts):
@@ -55,7 +87,7 @@ def main():
     args = parser.parse_args()
 
     df = pd.read_table(args.fin)
-    counts = make_counts(df)
+    counts = make_counts(df, args.fin)
     rowData = make_rowData(df, counts)
     colData = make_colData(df, counts)
 

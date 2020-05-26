@@ -13,6 +13,7 @@ Process HDST counts from Vickovic et al (20190
 """
 
 import argparse
+import gzip
 import numpy as np
 import pandas as pd
 
@@ -40,12 +41,15 @@ def make_counts(df, fname):
     counts = np.zeros((n_genes, n_spots))
 
     # Add each count in file to corresponding matrix entry
-    with open(fname) as countfile:
+    with gzip.open(fname, 'rt') as countfile:
         # skip header
         next(countfile)
 
-        for line in countfile:
-            spot, px, py, gene, count = line.strip().split()
+        for i, line in enumerate(countfile):
+            spot, px, py, gene, count = line.strip().split('\t')
+            # Skip null genes
+            if gene == "":
+                continue
             counts[gene_idx[gene], spot_idx[spot]] = int(count)
 
     # Cast to DataFrame with gene/spot names
@@ -87,6 +91,7 @@ def main():
     args = parser.parse_args()
 
     df = pd.read_table(args.fin)
+    df = df.loc[~df.gene.isnull()].copy()
     counts = make_counts(df, args.fin)
     rowData = make_rowData(df, counts)
     colData = make_colData(df, counts)

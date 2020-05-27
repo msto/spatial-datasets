@@ -33,9 +33,12 @@ make_SCE <- function(counts, rowData, colData) {
     # Index by spot and gene name
     rownames(colData) <- colData$spot
 
-    # TODO: decide how to handle gene names with multiple corresponding IDs
-    # rownames(rowData) <- uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
-    rownames(rowData) <- rowData$gene_name
+    if ("gene_id" %in% colnames(rowData)) {
+        rownames(rowData) <- uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
+    } else {
+        # TODO: decide how to handle gene names with multiple corresponding IDs
+        rownames(rowData) <- rowData$gene_name
+    }
 
     # Make count matrix sparse
     counts <- as(counts, "dgCMatrix")

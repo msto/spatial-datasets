@@ -6,6 +6,16 @@ suppressMessages(library(scater))
 suppressMessages(library(scran))
 suppressMessages(library(SingleCellExperiment))
 
+#' Make SingleCellExperiment object from counts, rowData, and colData tables
+#'
+#' Indexes data by gene common names and spot names.
+#' Other processing (e.g. cleaning of row/col columns) should be done upstream
+#' in per-dataset scripts
+#'
+#' @param counts Counts matrix (genes x spots)
+#' @param rowData Row data (must include "gene_name" column)
+#' @param colData Column data (must include "spot" column)
+#' @return SingleCellExperiment object
 make_SCE <- function(counts, rowData, colData) {
     # Load cleaned CSVs
     rowData <- read.csv(rowData)
@@ -56,6 +66,9 @@ add_metadata <- function(sce, options) {
     return(sce)
 }
 
+#' Simple processing of spatial dataset
+#'
+#' Log-normalized counts + denoised PCA
 process_SCE <- function(sce, options) {
     # TODO: benchmark/parameterize the choices here. 
     # Use existing defaults until then

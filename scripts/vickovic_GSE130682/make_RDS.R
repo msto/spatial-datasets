@@ -45,6 +45,34 @@ make_SCE <- function(counts, rowData, colData) {
                                 colData=colData)
 }
 
+add_metadata <- function(sce, options) {
+    if ("sample" %in% names(options)) {
+        colData(sce)$sample <- options$sample
+    }
+
+    return(sce)
+}
+
+process_SCE <- function(sce, options) {
+    # TODO: benchmark/parameterize the choices here. 
+    # Use existing defaults until then
+
+    # Log-normalized counts
+    sce <- scater::logNormCounts(sce)
+
+    # De-noised PCA
+    dec <- scran::modelGeneVarByPoisson(sce)
+    top <- scran::getTopHVGs(dec, prop=0.1)
+    sce <- scran::denoisePCA(sce, technical=dec, subset.row=top)
+
+    # Other dimensionality reduction
+    # TODO: solve error 
+    #   Error in density.default(x, adjust = adjust, from = min(x), to = max(x)) :
+    #   need at least 2 points to select a bandwidth automatically
+    # sce <- scater::runTSNE(sce, dimred="PCA")
+    # sce <- scater::runUMAP(sce, dimred="PCA")
+}
+
 main <- function() {
     # TODO clean this parsing up so it's not as hard-coded
     option_list <- list(
@@ -57,14 +85,8 @@ main <- function() {
     options <- opt$options
 
     sce <- make_SCE(args[[1]], args[[2]], args[[3]])
-
-    # Add sample label if provided
-    if (!is.null(options$sample)) {
-        colData(sce)$sample <- options$sample
-    }
-
-    sce <- scater::logNormCounts(sce)
-    # sce <- scran::denoisePCA(sce)
+    sce <- add_metadata(sce, options)
+    sce <- process_SCE(sce, options)
 
     saveRDS(sce, args[[4]])
 }

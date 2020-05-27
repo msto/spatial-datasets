@@ -12,6 +12,24 @@ make_SCE <- function(counts, rowData, colData) {
     colData <- read.csv(colData)
     counts <- as.matrix(read.csv(counts, row.names=1, check.names=F))
 
+    if (dim(counts)[1] != dim(rowData)[1]) {
+        stop("Count matrix and rowData contain different number of genes")
+    }
+
+    if (dim(counts)[2] != dim(colData)[1]) {
+        stop("Count matrix and colData contain different number of spots")
+    }
+
+    if (!("spot" %in% colnames(colData))) {
+        stop("colData is missing 'spot' ID column")
+    }
+
+    if (!("gene_name" %in% colnames(rowData))) {
+        stop("rowData is missing 'gene_name' ID column")
+    }
+
+    # TODO: check rowname ordering across counts and row/coldata
+
     # Index by spot and gene name
     rownames(colData) <- colData$spot
 

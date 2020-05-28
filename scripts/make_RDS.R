@@ -17,9 +17,9 @@ suppressMessages(library(SingleCellExperiment))
 #' @return SingleCellExperiment object
 make_SCE <- function(counts, rowData, colData) {
     # Load cleaned CSVs
-    rowData <- read.csv(rowData)
-    colData <- read.csv(colData)
-    counts <- as.matrix(read.csv(counts, row.names=1, check.names=F))
+    rowData <- read.csv(rowData, stringsAsFactors=FALSE)
+    colData <- read.csv(colData, stringsAsFactors=FALSE)
+    counts <- as.matrix(read.csv(counts, row.names=1, check.names=F, stringsAsFactors=FALSE))
 
     if (dim(counts)[1] != dim(rowData)[1]) {
         stop("Count matrix and rowData contain different number of genes")

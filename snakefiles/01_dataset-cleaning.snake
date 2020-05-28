@@ -9,8 +9,16 @@ subworkflow moncada_GSE111672:
     workdir: ".."
     configfile: "snakefiles/01_dataset-cleaning/moncada_GSE111672.yaml"
 
+subworkflow vickovic_GSE130682:
+    snakefile: "01_dataset-cleaning/vickovic_GSE130682.snake"
+    workdir: ".."
+    configfile: "snakefiles/01_dataset-cleaning/vickovic_GSE130682.yaml"
+
 rule all:
     input:
         thrane('data/cleaned/thrane.rds'),
+        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067523_CN13_D2.rds'),
+        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067524_CN24_D1.rds'),
+        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067525_CN24_E1.rds')
         moncada_GSE111672('data/raw/moncada_GSE111672/GSE111672_RAW.tar'),
         moncada_GSE111672('data/raw/moncada_GSE111672/GSM3036911_PDAC-A-st1.tsv.gz'),

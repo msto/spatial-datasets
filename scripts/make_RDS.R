@@ -3,7 +3,6 @@
 library(optparse)
 library(Matrix)
 suppressMessages(library(scater))
-suppressMessages(library(scran))
 suppressMessages(library(SingleCellExperiment))
 
 #' Make SingleCellExperiment object from counts, rowData, and colData tables
@@ -59,8 +58,10 @@ make_SCE <- function(counts, rowData, colData) {
 }
 
 add_metadata <- function(sce, options) {
-    if ("sample" %in% names(options)) {
-        colData(sce)$sample <- options$sample
+    for (key in c("sample", "dataset")) {
+        if (key %in% names(options)) {
+            metadata(sce)[[key]] <- options[[key]]
+        }
     }
 
     return(sce)
@@ -75,24 +76,25 @@ process_SCE <- function(sce, options) {
 
     # Log-normalized counts
     sce <- scater::logNormCounts(sce)
+    sce <- scater::runPCA(sce, ncomponents=15)
 
     # De-noised PCA
-    dec <- scran::modelGeneVarByPoisson(sce)
-    top <- scran::getTopHVGs(dec, prop=0.1)
-    sce <- scran::denoisePCA(sce, technical=dec, subset.row=top)
-
-    # Other dimensionality reduction
-    # TODO: solve error 
+    # TODO: solve error
     #   Error in density.default(x, adjust = adjust, from = min(x), to = max(x)) :
     #   need at least 2 points to select a bandwidth automatically
+    # dec <- scran::modelGeneVarByPoisson(sce)
+    # top <- scran::getTopHVGs(dec, prop=0.1)
+    # sce <- scran::denoisePCA(sce, technical=dec, subset.row=top)
+
+    # Other dimensionality reduction
     # sce <- scater::runTSNE(sce, dimred="PCA")
     # sce <- scater::runUMAP(sce, dimred="PCA")
 }
 
 main <- function() {
-    # TODO clean this parsing up so it's not as hard-coded
     option_list <- list(
-        make_option("--sample")
+        make_option("--sample"),
+        make_option("--dataset")
     )
     parser <- OptionParser(usage = "%prog [options] counts rowData colData RDS",
                            option_list=option_list)

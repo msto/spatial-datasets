@@ -12,6 +12,6 @@ subworkflow vickovic_GSE130682:
 rule all:
     input:
         thrane('data/cleaned/thrane.rds'),
-        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067523_CN13_D2.counts.csv.gz'),
-        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067524_CN24_D1.counts.csv.gz'),
-        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067525_CN24_E1.counts.csv.gz')
+        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067523_CN13_D2.rds'),
+        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067524_CN24_D1.rds'),
+        vickovic_GSE130682('data/cleaned/vickovic_GSE130682/GSM4067525_CN24_E1.rds')

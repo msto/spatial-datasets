@@ -7,5 +7,5 @@ samples:
     - GSM4100724_PDAC-B-st3
     - GSM4100725_PDAC-D-st1
     - GSM4100726_PDAC-E-st1
-    - GSM4100727_PDAC-F-st1
+    # - GSM4100727_PDAC-F-st1
     - GSM4100728_PDAC-G-st1

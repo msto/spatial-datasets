@@ -37,9 +37,14 @@ def main():
     parser.add_argument('counts')
     parser.add_argument('rowData')
     parser.add_argument('colData')
+    parser.add_argument('-t', '--transpose',
+                        action='store_true', default=False)
     args = parser.parse_args()
 
-    counts = pd.read_table(args.fin, index_col=0).transpose()
+    counts = pd.read_table(args.fin, index_col=0)
+    if args.transpose:
+        counts = counts.transpose()
+
     rowData = make_rowData(counts)
     colData = make_colData(counts)
 

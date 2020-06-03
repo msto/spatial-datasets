@@ -1,0 +1,71 @@
+
+rule download:
+    output:
+        "data/raw/moncada_GSE111672/GSE111672_RAW.tar"
+    shell:
+        """
+        curl -o {output} ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE111nnn/GSE111672/suppl/GSE111672_RAW.tar
+        """
+
+rule extract:
+    input:
+        "data/raw/moncada_GSE111672/GSE111672_RAW.tar"
+    output:
+        [f"data/raw/moncada_GSE111672/{sample}.tsv.gz" for sample in config['samples']]
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        tar -C {params.outdir} -xf {input};
+        mv {params.outdir}/GSM3036911.tsv.gz {params.outdir}/GSM3036911_PDAC-A-st1.tsv.gz;
+        mv {params.outdir}/GSM3405534_PDAC-B-ST1.tsv.gz {params.outdir}/GSM3405534_PDAC-B-st1.tsv.gz;
+        """
+
+rule clean_excel:
+    input:
+        "data/raw/moncada_GSE111672/{sample}.tsv.gz"
+    output:
+        "data/cleaned/moncada_GSE111672/{sample}.excel_cleaned.tsv.gz"
+    shell:
+        """
+        zcat {input} | sed -f scripts/excel_genes.sed - | gzip -c > {output}
+        """
+
+rule dedup_genes:
+    input:
+        "data/cleaned/moncada_GSE111672/{sample}.excel_cleaned.tsv.gz"
+    output:
+        "data/cleaned/moncada_GSE111672/{sample}.dedup.tsv.gz"
+    shell:
+        """
+        awk -f scripts/uniquify.awk <(zcat {input}) <(zcat {input}) | gzip -c > {output}
+        """
+
+rule make_data:
+    input:
+        "data/cleaned/moncada_GSE111672/{sample}.dedup.tsv.gz"
+    output:
+        counts='data/cleaned/moncada_GSE111672/{sample}.counts.csv.gz',
+        rowData='data/cleaned/moncada_GSE111672/{sample}.rowData.csv',
+        colData='data/cleaned/moncada_GSE111672/{sample}.colData.csv',
+    params:
+        flags = lambda wildcards: "-t" if wildcards.sample in ["GSM3036911_PDAC-A-st1", "GSM3405534_PDAC-B-st1"] else ""
+    shell:
+        """
+        ./scripts/moncada_GSE111672/make_data.py {params.flags} \
+            {input} {output.counts} {output.rowData} {output.colData}
+        """
+
+rule make_RDS:
+    input:
+        counts='data/cleaned/moncada_GSE111672/{sample}.counts.csv.gz',
+        rowData='data/cleaned/moncada_GSE111672/{sample}.rowData.csv',
+        colData='data/cleaned/moncada_GSE111672/{sample}.colData.csv'
+    output:
+        rds='data/cleaned/moncada_GSE111672/{sample}.rds'
+    shell:
+        """
+        ./scripts/make_RDS.R \
+            --sample {wildcards.sample} --dataset moncada_GSE111672 \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """

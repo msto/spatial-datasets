@@ -1,0 +1,72 @@
+---
+title: "Conos demo (Moncada)"
+output: html_notebook
+---
+
+Experimenting with Conos on Moncada samples (matched ST and scRNA-seq libraries). Alignment didn't appear to work well (see over-representation of ST spots in cluster 5); scrapped in favor of Seurat.
+
+```{r}
+suppressMessages(library(SingleCellExperiment))
+suppressMessages(library(pagoda2))
+suppressMessages(library(conos))
+setwd("/fh/fast/gottardo_r/data_transfer/spatial-datasets")
+```
+
+```{r}
+panel <- list()
+sampleIDs <- c("GSM3405527_PDAC-A-indrop3", 
+               "GSM3405528_PDAC-A-indrop4",
+               "GSM3405529_PDAC-A-indrop5",
+               "GSM3405530_PDAC-A-indrop6")
+
+for (sampleID in sampleIDs) {
+  fname <- file.path("data/raw/moncada_GSE111672/", paste(sampleID, "tsv.gz", sep="."))
+  expr <- read.table(fname, header=TRUE, row.names=1) 
+  sample_name <- unlist(strsplit(sampleID, "_"))[2]
+  panel[[sample_name]] <- as.matrix(expr)
+}
+
+sce <- readRDS("data/cleaned/moncada_GSE111672/GSM3036911_PDAC-A-st1.rds")
+panel[["PDAC-A-st1"]] <- as.matrix(counts(sce))
+```
+
+
+```{r}
+set.seed(149)
+preproc <- lapply(panel, pagoda2::basicP2proc, n.cores=3,
+                  min.cells.per.gene=0, n.odgenes=2e3,
+                  get.largevis=FALSE, make.geneknn=FALSE)
+con <- Conos$new(preproc)
+```
+
+```{r}
+options(repr.plot.width=8, repr.plot.height=6)
+con$plotPanel(clustering="multilevel", use.local.clusters=T, title.size=6)
+```
+
+```{r}
+con$buildGraph(k=15,
+               k.self=5,
+               space='PCA',
+               ncomps=30,
+               n.odgenes=2000,
+               matching.method='mNN',
+               metric='angular',
+               score.component.variance=TRUE,
+               verbose=TRUE)
+```
+```{r}
+con$findCommunities(method=leiden.community, resolution=0.5)
+con$plotPanel(font.size=4)
+```
+
+```{r}
+plotClusterBarplots(con, legend.height = 0.1)
+```
+```{r}
+con$plotGraph(alpha=0.1, show.legend=T)
+```
+```{r}
+con$plotGraph(color.by='sample', mark.groups=F, alpha=0.1, show.legend=T)
+```
+

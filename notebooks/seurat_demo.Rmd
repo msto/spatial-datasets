@@ -1,0 +1,197 @@
+---
+title: "Alignment of scRNA and ST libraries from Moncada et al (GSE111672) with Seurat"
+output: html_notebook
+---
+
+## Summary
+
+This notebook demonstrates using Seurat to align a spatial transcriptomic library to four scRNA-seq libraries from the same sample.
+
+I followed these two demos in the Seurat docs:  
+
+* [Alignment tutorial](https://satijalab.org/seurat/Seurat_AlignmentTutorial.html) (2018, some function names/parameters outdated)
+* [Integrating stimulated vs control PBMC datasets](https://satijalab.org/seurat/v3.1/immune_alignment.html) (2020)
+
+This seems to be a decent proof of principle. The dataset alignment/integration appears to work well for the two samples in the Moncada paper. I couldn't find the cell type labels used in the paper on GEO or in the supplement, but we could try reaching out to the authors if we want to dig further into this dataset.
+
+## Methodology
+
+The Seurat alignment algorithm is reported in [Stuart et al.](https://www.sciencedirect.com/science/article/pii/S0092867419305598?via%3Dihub) My understanding is that the algorithm operates as follows (math copied from the paper's methods):
+
+### Identifying "anchor" cells
+
+1. Select the top 2,000 genes that are highly variable in the most datasets, ranking first by number of datasets in which each gene is variable and second by the median rank of the gene's variability across datasets.  
+2. Identify pairs of "anchor" cells in each pair of datasets - mutual nearest neighbors in CCA space (n=30 dimensions, k = 5 neighbors)
+3. Anchors are required to remain mutual neighbors at a higher-dimensional (n=200) projection but with a larger neighborhood (k = 200 neighbors). Anchors are also scored by the similarity of their neighborhoods in both datasets.
+4. A pairwise weight $W_{ci}$ is defined between each cell $c$ and each of the nearest $k$ anchors in the same dataset. The distance between the two cells is defined $D_{ci} = (1 - \frac{dist(c, a_i)}{dist(c, a_k)})S_{a_i}$. It's the distance (in some PCA space) between the two cells, weighted by the ratio of their distance to the furthest anchor, and weighted again by the score of the anchor. This distance is then normalized using a Gaussian kernel and again normalized by the sum of all distances between $c$ and the $k$ anchors. 
+
+### Dataset integration
+
+The paper describes two applications of the weight matrix $W$, the first of which is dataset "integration", or alignment. 
+
+1. The "anchor integration" matrix $B$ contains the difference of expression vectors for all pairs of anchor cells in $Y$ and $X$, that is $B = Y[, a] - X[, a]$.
+2. The "transformation" matrix $C=BW^T$ 
+3. The "integrated" expression matrix $\hat{Y}=Y-C$. (note: if I understand correctly, an integrated Seurat object concatenates $X$ and $\hat{Y}$)
+4. Note: Multiple datasets, as in our example, are integrated pairwise. The order of integration is determined by the pairwise distances between the datasets, defined as the number cells in the smaller dataset divided by the total number of anchors shared by the pair.
+
+### Transfer learning
+
+Cell type labels from a reference dataset may be transferred to a query dataset.
+
+1. Let $L$ be a binary classification matrix over the anchor cells, that is, $L_{ji}=1$ if anchor $i$ is of cell type $j$ and 0 otherwise.
+2. The prediction matrix $P=LW^T$ contains probability vectors for each query cell over the cell type assignments.
+
+## Application to Moncada samples
+
+Moncada et al. uploaded ST and scRNA-seq libraries for two samples - PDAC-A (1x ST library, 3x scRNA-seq) and PDAC-B (3x ST, 3x scRNA-seq). The samples were pancreatic tumors (pancreatic ductal adenocarcinomas; PDAC) from two different samples. The ST library from PDAC-A and the first ST library from PDAC-B were obtained from a tissue section directly adjacent to that used to prepare the scRNA-seq libraries; the location of the other two ST libraries from PDAC-B was not specified in the paper.
+
+```{r}
+library(SingleCellExperiment)
+library(Seurat)
+setwd("/fh/fast/gottardo_r/data_transfer/spatial-datasets")
+```
+
+### Preprocessing
+First, we load in the expression matrices. The ST library was already cleaned; the scRNA-seq libraries are provided as raw counts and didn't require any additional prior cleaning.
+```{r}
+panel <- list()
+sampleIDs <- c("GSM3405527_PDAC-A-indrop3", 
+               "GSM3405528_PDAC-A-indrop4",
+               "GSM3405529_PDAC-A-indrop5",
+               "GSM3405530_PDAC-A-indrop6")
+
+WORKDIR <- "/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/raw/moncada_GSE111672"
+for (sampleID in sampleIDs) {
+  fname <- file.path(WORKDIR, paste(sampleID, "tsv.gz", sep="."))
+  expr <- read.table(fname, header=TRUE, row.names=1) 
+  sample_name <- unlist(strsplit(sampleID, "_"))[2]
+  panel[[sample_name]] <- as.matrix(expr)
+}
+
+# Load the cleaned ST SingleCellExperiment
+fname <- "/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/cleaned/moncada_GSE111672/GSM3036911_PDAC-A-st1.rds"
+sce <- readRDS(fname)
+panel[["PDAC-A-st1"]] <- as.matrix(counts(sce))
+```
+
+Next, I applied the recommended basic preprocessing - log-normalized counts and identification of HVGs.
+```{r}
+seurat_preprocessing <- function(expr) {
+  sobj <- CreateSeuratObject(expr)
+  sobj <- NormalizeData(object=sobj)
+  sobj <- FindVariableFeatures(sobj, selection.method = "vst", nfeatures=2000)
+}
+
+set.seed(149)
+preproc <- lapply(panel, seurat_preprocessing)
+```
+
+
+Finally, I added sample labels to the Seurat metadata to annotate later figures.
+```{r}
+add_sample_ID <- function(sobj, sampleID, col_name) {
+  col <- rep(sampleID, ncol(sobj))
+  names(col) <- colnames(sobj)
+  sobj <- AddMetaData(object=sobj, metadata=col, col.name=col_name)
+  sobj
+}
+
+for (name in names(preproc)) {
+  preproc[[name]] <- add_sample_ID(preproc[[name]], name, "sampleID")
+}
+```
+
+### Library alignment
+
+These two functions apply the anchor identification and data integration algorithms described above.
+```{r}
+anchors <- FindIntegrationAnchors(object.list = preproc, dims = 1:20)
+combined <- IntegrateData(anchorset = anchors, dims = 1:20)
+```
+
+The integrated expression matrix can now be treated as a normal scRNA-seq experiment and be processed as usual - data scaling, dimensionality reduction, clustering.
+```{r}
+DefaultAssay(combined) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+combined <- ScaleData(combined, verbose = FALSE)
+combined <- RunPCA(combined, npcs = 30, verbose = FALSE)
+
+# t-SNE and Clustering
+combined <- RunUMAP(combined, reduction = "pca", dims = 1:20)
+combined <- FindNeighbors(combined, reduction = "pca", dims = 1:20)
+combined <- FindClusters(combined, resolution = 0.5)
+```
+
+## Results
+
+I think these two figures look promising. Both figures contain the same UMAP projection of the integrated expression matrix. The first contains all five libraries overlaid with cells colored by library; the second shows the five libraries split out with cells colored by cluster (using Seurat's default SNN clustering). There's no noticeable batch effect among the four scRNA-seq libraries, nor does their appear to be any noticeable difference in the ST library.
+```{r}
+DimPlot(combined, reduction = "umap", group.by = "sampleID")
+```
+
+```{r}
+DimPlot(combined, reduction = "umap", split.by = "sampleID", ncol=3)
+```
+
+### Harmony
+```{r}
+library(harmony)
+
+```
+
+
+### Replication sample (PDAC-B)
+
+```{r}
+panelB <- list()
+sampleIDs <- c("GSM3405531_PDAC-B-indrop1", 
+               "GSM3405532_PDAC-B-indrop2",
+               "GSM3405533_PDAC-B-indrop3")
+
+WORKDIR <- "/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/raw/moncada_GSE111672"
+for (sampleID in sampleIDs) {
+  fname <- file.path(WORKDIR, paste(sampleID, "tsv.gz", sep="."))
+  expr <- read.table(fname, header=TRUE, row.names=1) 
+  sample_name <- unlist(strsplit(sampleID, "_"))[2]
+  panelB[[sample_name]] <- as.matrix(expr)
+}
+
+sce <- readRDS("/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/cleaned/moncada_GSE111672/GSM3405534_PDAC-B-st1.rds")
+panelB[["PDAC-B-st1"]] <- as.matrix(counts(sce))
+
+sce <- readRDS("/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/cleaned/moncada_GSE111672/GSM4100723_PDAC-B-st2.rds")
+panelB[["PDAC-B-st2"]] <- as.matrix(counts(sce))
+
+sce <- readRDS("/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/cleaned/moncada_GSE111672/GSM4100724_PDAC-B-st3.rds")
+panelB[["PDAC-B-st3"]] <- as.matrix(counts(sce))
+
+set.seed(149)
+preprocB <- lapply(panelB, seurat_preprocessing)
+
+for (name in names(preprocB)) {
+  preprocB[[name]] <- add_sample_ID(preprocB[[name]], name, "sampleID")
+}
+```
+
+```{r}
+anchorsB <- FindIntegrationAnchors(object.list = preprocB, dims = 1:20)
+combinedB <- IntegrateData(anchorset = anchorsB, dims = 1:20)
+
+DefaultAssay(combinedB) <- "integrated"
+
+# Run the standard workflow for visualization and clustering
+combinedB <- ScaleData(combinedB, verbose = FALSE)
+combinedB <- RunPCA(combinedB, npcs = 30, verbose = FALSE)
+
+# t-SNE and Clustering
+combinedB <- RunUMAP(combinedB, reduction = "pca", dims = 1:20)
+combinedB <- FindNeighbors(combinedB, reduction = "pca", dims = 1:20)
+combinedB <- FindClusters(combinedB, resolution = 0.5)
+```
+
+As above, I think the alignment worked reasonably well. Here, there's a noticeable lack of the large pink cluster in the center in indrop1, and the ST libraries appear to be much sparser. Otherwise, there don't appear to be any technology-specific clusters.
+```{r}
+DimPlot(combinedB, reduction = "umap", split.by = "sampleID", ncol=3)
+```
+

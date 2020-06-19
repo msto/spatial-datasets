@@ -1,0 +1,86 @@
+---
+title: "LIGER alignment of scRNA and ST libraries from Moncada et al (GSE111672)"
+output: html_notebook
+---
+
+## Summary
+
+This notebook demonstrates using LIGER to align a spatial transcriptomic library to four scRNA-seq libraries from the same sample.
+
+I adapted this tutorial from their documentation:
+
+* [Walkthrough - aligning PBMC data](https://macoskolab.github.io/liger/walkthrough_pbmc.html)
+
+As far as I can tell, LIGER doesn't permit a formal label transfer or cell type inference; though it may be possible to do a clustering or nearest-neighbors vote on the aligned data.
+
+## Application to Moncada samples
+
+```{r}
+library(SingleCellExperiment)
+library(liger)
+setwd("/fh/fast/gottardo_r/data_transfer/spatial-datasets")
+```
+
+### Preprocessing
+First, we load in the expression matrices. The ST library was already cleaned; the scRNA-seq libraries are provided as raw counts and didn't require any additional prior cleaning. (Same as in Seurat; LIGER operates on a list of expression matrices.)
+```{r}
+panel <- list()
+sampleIDs <- c("GSM3405527_PDAC-A-indrop3", 
+               "GSM3405528_PDAC-A-indrop4",
+               "GSM3405529_PDAC-A-indrop5",
+               "GSM3405530_PDAC-A-indrop6")
+
+WORKDIR <- "/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/raw/moncada_GSE111672"
+for (sampleID in sampleIDs) {
+  fname <- file.path(WORKDIR, paste(sampleID, "tsv.gz", sep="."))
+  expr <- read.table(fname, header=TRUE, row.names=1) 
+  sample_name <- unlist(strsplit(sampleID, "_"))[2]
+  
+  # Add sample IDs to cell labels to avoid duplicates
+  colnames(expr) <- paste0(sample_name, "__", colnames(expr))
+  panel[[sample_name]] <- as.matrix(expr)
+}
+
+# Load the cleaned ST SingleCellExperiment
+fname <- "/fh/fast/gottardo_r/data_transfer/spatial-datasets/data/cleaned/moncada_GSE111672/GSM3036911_PDAC-A-st1.rds"
+sce <- readRDS(fname)
+panel[["PDAC-A-st1"]] <- as.matrix(counts(sce))
+colnames(panel[["PDAC-A-st1"]]) <- paste0("PDAC-A-st1__", colnames(panel[["PDAC-A-st1"]]))
+```
+
+
+```{r}
+# Create liger object
+PDAC_A <- createLiger(panel)
+
+PDAC_A <- normalize(PDAC_A)
+PDAC_A <- selectGenes(PDAC_A, var.thresh = c(0.3, 0.875), do.plot = F)
+PDAC_A <- scaleNotCenter(PDAC_A)
+```
+
+```{r}
+k.suggest <- suggestK(PDAC_A, num.cores = 10, gen.new = T, return.data = T, plot.log2 = F, nrep = 5)
+```
+
+```{r}
+PDAC_A <- optimizeALS(PDAC_A, k=25, thresh = 5e-5, nrep = 3)
+```
+
+
+```{r}
+PDAC_A <- runUMAP(PDAC_A, use.raw = T)
+p1 <- plotByDatasetAndCluster(PDAC_A, return.plots = T)
+print(p1[[1]])
+```
+
+```{r}
+PDAC_A <- quantile_norm(PDAC_A)
+PDAC_A <- louvainCluster(PDAC_A)
+```
+
+```{r}
+PDAC_A <- runUMAP(PDAC_A)
+p_a <- plotByDatasetAndCluster(PDAC_A, return.plots = T) 
+print(p_a[[1]])
+```
+

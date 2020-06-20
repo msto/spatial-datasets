@@ -1,0 +1,111 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+Run Spotlight on Thrane 1.1 and 1.2 samples (melanoma).
+
+```{r setup}
+library(SPOTlight)
+library(Seurat)
+library(dplyr)
+
+knitr::opts_knit$set(root.dir = "/fh/fast/gottardo_r/data_transfer/spatial-datasets")
+```
+
+## Reference scRNA data - Tirosh (2016)
+
+Tirosh data are already log-normalized, so skip the usual Seurat preprocessing. We just load the cell type assignments and add them to the metadata.
+```{r}
+expr <- read.table("data/scRNA/tirosh_GSE72056/tirosh_GSE72056.expr.txt.gz", 
+                   header=TRUE, row.names=1)
+
+tirosh <- CreateSeuratObject(expr)
+
+cell_types <- read.table("data/scRNA/tirosh_GSE72056/tirosh_GSE72056.cell_types.txt", header=T, stringsAsFactors=F, row.names=1)
+tirosh@meta.data <- cbind(tirosh@meta.data, cell_types)
+
+tirosh <- tirosh[, tirosh@meta.data$cell_type != "Unclassified"]
+```
+
+Find cell type markers with Seurat (TODO: try using the markers provided in Tirosh supplement.)
+```{r}
+Seurat::Idents(object = tirosh) <- tirosh@meta.data$cell_type
+cluster_markers_all <- Seurat::FindAllMarkers(object = tirosh, 
+                                              assay = "RNA",
+                                              slot = "data",
+                                              verbose = TRUE, 
+                                              only.pos = TRUE, 
+                                              logfc.threshold = 1,
+                                              min.pct = 0.9)
+```
+
+## Query spatial data - Thrane 1.1 or 1.2
+
+Run the preprocessing [recommended in the demo](https://github.com/MarcElosua/SPOTlight/blob/master/README.md#spatial-data).
+```{r}
+sce <- readRDS("data/cleaned/thrane/ST_mel1_rep1.rds")
+
+ST <- CreateSeuratObject(as.matrix(counts(sce)), assay="Spatial")
+
+ST <- Seurat::SCTransform(ST, assay = "Spatial", verbose = FALSE)
+ST <- Seurat::RunPCA(ST, verbose = FALSE)
+ST <- Seurat::RunUMAP(ST, dims = 1:30, verbose = FALSE)
+ST <- Seurat::FindNeighbors(ST, dims = 1:30, verbose = FALSE)
+ST <- Seurat::FindClusters(ST, verbose = FALSE)
+```
+
+
+## Spotlight
+Run spotlight with [suggested parameters](https://github.com/MarcElosua/SPOTlight/blob/master/README.md#run-deconvolution)
+```{r}
+set.seed(149)
+spotlight_ls <- spotlight_deconvolution(se_sc = tirosh,
+                                        counts_spatial = ST@assays$Spatial@counts,
+                                        clust_vr = "cell_type",
+                                        cluster_markers = cluster_markers_all,
+                                        cl_n = 100, # 100 by default
+                                        hvg = 3000,
+                                        ntop = NULL,
+                                        transf = "uv",
+                                        method = "nsNMF",
+                                        min_cont = 0.09)
+```
+
+Get matrix of cell type proportions, and add row/col data for plotting
+```{r}
+decon_mtrx <- spotlight_ls[[2]]
+cell_types_all <- colnames(decon_mtrx)[which(colnames(decon_mtrx) != "res_ss")]
+ST@meta.data <- cbind(ST@meta.data, decon_mtrx)
+
+ST@meta.data <- cbind(ST@meta.data, as.data.frame(colData(sce)))
+md <- ST@meta.data
+```
+
+Plot proportions of each cell type in each spot
+```{r}
+plot_proportion <- function(cell_type) {
+  plot <- ggplot(md, aes(x = -col, y = -row, fill = md[[cell_type]])) +
+    geom_point(size = 6, pch = 22)+
+      scale_fill_gradient(low="#ffffff", high="#e50000", breaks=c(0, 1)) +
+    labs(x = NULL, y = NULL, fill = cell_type) +
+    theme_void() + 
+    coord_fixed()
+  plot
+}
+
+n_col <- 4
+n_row <- 2
+panel.width <- 6
+panel.height <- 6
+
+options(repr.plot.height = 8 * n_row, repr.plot.width = 8 * n_col)
+plot_grid(plotlist=purrr::map(cell_types_all, plot_proportion), ncol=n_col, labels=cell_types_all)
+ggsave("results/alignment/spotlight/ST_mel1_rep1.cell_type_proportions.no_unclassified.pdf", width=panel.width * n_col, height=panel.height * n_row)
+```
+
+
+```{r}
+write.csv(ST@meta.data[, cell_types_all], "results/alignment/spotlight/ST_mel1_rep1.cell_type_proportions.no_unclassified.csv", row.names=T, quote=F)
+```
+

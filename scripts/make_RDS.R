@@ -14,7 +14,7 @@ make_SCE_from_10X <- function(dirname) {
 
     colData <- read.csv(file.path(spatial_dir, "tissue_positions_list.csv"), header=F)
     # colnames(colData) <- c("spot", "in_tissue", "x", "y", "image_x", "image_y")
-    colnames(colData) <- c("spot", "in_tissue", "col", "row", "imagecol", "imagerow")
+    colnames(colData) <- c("spot", "in_tissue", "row", "col", "imagerow", "imagecol")
     rownames(colData) <- colData$spot
     colData <- colData[colData$in_tissue > 0, ]
 
@@ -27,7 +27,7 @@ make_SCE_from_10X <- function(dirname) {
     barcodes <- read.table(file.path(matrix_dir, "barcodes.tsv.gz"), header=F)
     colnames(counts) <- barcodes$V1
     rownames(counts) <- rownames(rowData)
-    
+    counts <- counts[, rownames(colData)]
     
     sce <- SingleCellExperiment(assays=list(counts=counts),
                                 rowData=rowData,

@@ -16,13 +16,18 @@ make_SCE_from_10X <- function(dirname) {
     # colnames(colData) <- c("spot", "in_tissue", "x", "y", "image_x", "image_y")
     colnames(colData) <- c("spot", "in_tissue", "col", "row", "imagecol", "imagerow")
     rownames(colData) <- colData$spot
+    colData <- colData[colData$in_tissue > 0, ]
 
     rowData <- read.table(file.path(matrix_dir, "features.tsv.gz"), header=F)
     colnames(rowData) <- c("gene_id", "gene_name", "X")
     rowData <- rowData[, c("gene_id", "gene_name")]
     rownames(rowData) <- scater::uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
 
-    counts <- readMM(file.path(matrix_dir, "matrix.mtx.gz"))
+    counts <- Matrix::readMM(file.path(matrix_dir, "matrix.mtx.gz"))
+    barcodes <- read.table(file.path(matrix_dir, "barcodes.tsv.gz"), header=F)
+    colnames(counts) <- barcodes$V1
+    rownames(counts) <- rownames(rowData)
+    
     
     sce <- SingleCellExperiment(assays=list(counts=counts),
                                 rowData=rowData,

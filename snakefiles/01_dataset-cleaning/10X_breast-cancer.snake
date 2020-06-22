@@ -1,0 +1,29 @@
+
+rule all:
+    input:
+        expand("data/raw/10X_breast-cancer/A.{section}/spatial/tissue_positions_list.csv", section=[1, 2])
+
+rule download:
+    output:
+        expr="data/raw/10X_breast-cancer/A.{section}/filtered_feature_bc_matrix.tar.gz",
+        spatial="data/raw/10X_breast-cancer/A.{section}/spatial.tar.gz",
+    shell:
+        """
+        curl -o {output.expr} http://cf.10xgenomics.com/samples/spatial-exp/1.0.0/V1_Breast_Cancer_Block_A_Section_{wildcards.section}/V1_Breast_Cancer_Block_A_Section_{wildcards.section}_filtered_feature_bc_matrix.tar.gz
+        curl -o {output.spatial} http://cf.10xgenomics.com/samples/spatial-exp/1.0.0/V1_Breast_Cancer_Block_A_Section_{wildcards.section}/V1_Breast_Cancer_Block_A_Section_{wildcards.section}_spatial.tar.gz
+        """
+
+rule extract:
+    input:
+        expr="data/raw/10X_breast-cancer/A.{section}/filtered_feature_bc_matrix.tar.gz",
+        spatial="data/raw/10X_breast-cancer/A.{section}/spatial.tar.gz",
+    output:
+        "data/raw/10X_breast-cancer/A.{section}/filtered_feature_bc_matrix/matrix.mtx.gz",
+        "data/raw/10X_breast-cancer/A.{section}/spatial/tissue_positions_list.csv",
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        tar -C {params.outdir} -xzf {input.expr};
+        tar -C {params.outdir} -xzf {input.spatial};
+        """

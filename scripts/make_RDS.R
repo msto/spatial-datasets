@@ -2,8 +2,32 @@
 
 library(optparse)
 library(Matrix)
-suppressMessages(library(scater))
+# suppressMessages(library(scater))
 suppressMessages(library(SingleCellExperiment))
+
+make_SCE_from_10X <- function(dirname) {
+    spatial_dir <- file.path(dirname, "spatial")
+    matrix_dir <- file.path(dirname, "filtered_feature_bc_matrix")
+
+    if (!dir.exists(matrix_dir)) stop(paste0("Matrix directory does not exist: ", matrix_dir))
+    if (!dir.exists(spatial_dir)) stop(paste0("Spatial directory does not exist: ", spatial_dir))
+
+    colData <- read.csv(file.path(spatial_dir, "tissue_positions_list.csv"), header=F)
+    # colnames(colData) <- c("spot", "in_tissue", "x", "y", "image_x", "image_y")
+    colnames(colData) <- c("spot", "in_tissue", "col", "row", "imagecol", "imagerow")
+    rownames(colData) <- colData$spot
+
+    rowData <- read.table(file.path(matrix_dir, "features.tsv.gz"), header=F)
+    colnames(rowData) <- c("gene_id", "gene_name", "X")
+    rowData <- rowData[, c("gene_id", "gene_name")]
+    rownames(rowData) <- scater::uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
+
+    counts <- readMM(file.path(matrix_dir, "matrix.mtx.gz"))
+    
+    sce <- SingleCellExperiment(assays=list(counts=counts),
+                                rowData=rowData,
+                                colData=colData)
+}
 
 #' Make SingleCellExperiment object from counts, rowData, and colData tables
 #'
@@ -43,7 +67,7 @@ make_SCE <- function(counts, rowData, colData) {
     rownames(colData) <- colData$spot
 
     if ("gene_id" %in% colnames(rowData)) {
-        rownames(rowData) <- uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
+        rownames(rowData) <- scater::uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
     } else {
         # TODO: decide how to handle gene names with multiple corresponding IDs
         rownames(rowData) <- rowData$gene_name
@@ -94,19 +118,26 @@ process_SCE <- function(sce, options) {
 main <- function() {
     option_list <- list(
         make_option("--sample"),
-        make_option("--dataset")
+        make_option("--dataset"),
+        make_option("--tenX", action="store_true", default=FALSE)
     )
-    parser <- OptionParser(usage = "%prog [options] counts rowData colData RDS",
+    parser <- OptionParser(usage = "%prog [options] (counts rowData colData | --tenX dirname) RDS",
                            option_list=option_list)
-    opt <- parse_args(parser, positional_arguments=4)
+    opt <- parse_args(parser, positional_arguments=c(2, 4))
     args <- opt$args
     options <- opt$options
 
-    sce <- make_SCE(args[[1]], args[[2]], args[[3]])
+    if (options$tenX) {
+        sce <- make_SCE_from_10X(args[[1]])
+        fout <- args[[2]]
+    } else {
+        sce <- make_SCE(args[[1]], args[[2]], args[[3]])
+        fout <- args[[4]]
+    }
     sce <- add_metadata(sce, options)
     sce <- process_SCE(sce, options)
 
-    saveRDS(sce, args[[4]])
+    saveRDS(sce, fout)
 }
 
 if (sys.nframe() == 0) {

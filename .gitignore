@@ -3,3 +3,4 @@ data/
 *.swp
 *.nb.html
 .ipynb_checkpoints/
+.Rproj.user

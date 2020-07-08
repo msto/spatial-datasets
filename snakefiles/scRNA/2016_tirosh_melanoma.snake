@@ -1,0 +1,64 @@
+
+rule all:
+    input:
+        "data/rds/scRNA/2016_tirosh_melanoma.rds"
+
+rule download:
+    output:
+        expr="data-raw/scRNA/2016_tirosh_melanoma/GSE72056_melanoma_single_cell_revised_v2.txt.gz",
+    shell:
+        """
+        curl -o {output} https://ftp.ncbi.nlm.nih.gov/geo/series/GSE72nnn/GSE72056/suppl/GSE72056%5Fmelanoma%5Fsingle%5Fcell%5Frevised%5Fv2%2Etxt%2Egz
+        """
+
+rule format_matrix:
+    input:
+        expr="data-raw/scRNA/2016_tirosh_melanoma/GSE72056_melanoma_single_cell_revised_v2.txt.gz",
+    output:
+        expr="data/cleaned/scRNA/2016_tirosh_melanoma/logcounts.csv.gz"
+    shell:
+        """
+        awk -f scripts/uniquify.awk <(zcat {input}) <(zcat {input}) | 
+          sed -e '2,4d' | 
+          sed -e '1s/^Cell/gene/' | 
+          sed -e 's/\\t/,/g' |
+          gzip -c > {output}
+        """
+
+rule make_colData:
+    input:
+        expr="data-raw/scRNA/2016_tirosh_melanoma/GSE72056_melanoma_single_cell_revised_v2.txt.gz",
+    output:
+        raw_ct="data/cleaned/scRNA/2016_tirosh_melanoma/cell_type_lines.txt",
+        cell_types="data/cleaned/scRNA/2016_tirosh_melanoma/colData.csv"
+    shell:
+        """
+        set +o pipefail;
+        zcat {input} | head -n4 | cut -f 2- > {output.raw_ct};
+        ./scripts/2016_tirosh_melanoma/parse_cell_types.py {output.raw_ct} {output.cell_types}
+        """
+
+rule make_rowData:
+    input:
+        expr="data/cleaned/scRNA/2016_tirosh_melanoma/logcounts.csv.gz"
+    output:
+        cell_types="data/cleaned/scRNA/2016_tirosh_melanoma/rowData.csv"
+    shell:
+        """
+        zcat {input} | cut -d "," -f 1 | sed '1s/gene/gene_name/' > {output}
+        """
+
+rule make_RDS:
+    input:
+        counts="data/cleaned/scRNA/2016_tirosh_melanoma/logcounts.csv.gz",
+        colData="data/cleaned/scRNA/2016_tirosh_melanoma/colData.csv",
+        rowData="data/cleaned/scRNA/2016_tirosh_melanoma/rowData.csv",
+    output:
+        rds="data/rds/scRNA/2016_tirosh_melanoma.rds"
+    shell:
+        """
+        ./scripts/make_RDS.R \
+            --logcounts \
+            --dataset 2016_tirosh_melanoma \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """

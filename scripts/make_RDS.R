@@ -47,7 +47,7 @@ make_SCE_from_10X <- function(dirname) {
 make_SCE <- function(counts, rowData, colData) {
     # Load cleaned CSVs
     rowData <- read.csv(rowData, stringsAsFactors=FALSE)
-    colData <- read.csv(colData, stringsAsFactors=FALSE)
+    colData <- read.csv(colData, stringsAsFactors=FALSE, row.names=1)
     counts <- as.matrix(read.csv(counts, row.names=1, check.names=F, stringsAsFactors=FALSE))
 
     if (dim(counts)[1] != dim(rowData)[1]) {
@@ -58,18 +58,11 @@ make_SCE <- function(counts, rowData, colData) {
         stop("Count matrix and colData contain different number of spots")
     }
 
-    if (!("spot" %in% colnames(colData))) {
-        stop("colData is missing 'spot' ID column")
-    }
-
     if (!("gene_name" %in% colnames(rowData))) {
         stop("rowData is missing 'gene_name' ID column")
     }
 
     # TODO: check rowname ordering across counts and row/coldata
-
-    # Index by spot and gene name
-    rownames(colData) <- colData$spot
 
     if ("gene_id" %in% colnames(rowData)) {
         rownames(rowData) <- scater::uniquifyFeatureNames(rowData$gene_id, rowData$gene_name)
@@ -105,7 +98,9 @@ process_SCE <- function(sce, options) {
 
     # Log-normalized counts
     sce <- scater::logNormCounts(sce)
-    sce <- scater::runPCA(sce, ncomponents=15)
+    dec <- scran::modelGeneVar(sce)
+    top <- scran::getTopHVGs(dec, n=2000)
+    sce <- scater::runPCA(sce, subset_row=top, ncomponents=15)
 
     # De-noised PCA
     # TODO: solve error

@@ -1,0 +1,78 @@
+
+SAMPLES = ['P4', 'P6']
+
+rule all:
+    input:
+        expand("data/rds/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.rds", patient=SAMPLES),
+
+rule download:
+    output:
+        expr="data-raw/scRNA/2020_ji_squamous-cell-carcinoma/GSE144236_cSCC_counts.txt.gz",
+        metadata="data-raw/scRNA/2020_ji_squamous-cell-carcinoma/GSE144236_patient_metadata_new.txt.gz",
+    shell:
+        """
+        curl -o {output.expr} https://ftp.ncbi.nlm.nih.gov/geo/series/GSE144nnn/GSE144236/suppl/GSE144236%5FcSCC%5Fcounts%2Etxt%2Egz;
+        curl -o {output.metadata} https://ftp.ncbi.nlm.nih.gov/geo/series/GSE144nnn/GSE144236/suppl/GSE144236_patient_metadata_new.txt.gz
+        """
+
+rule split_colData:
+    input:
+        metadata="data-raw/scRNA/2020_ji_squamous-cell-carcinoma/GSE144236_patient_metadata_new.txt.gz",
+    output:
+        "data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.colData.csv"
+    shell:
+        """
+        zcat {input} | 
+          sed -e '1s/^/cell\\t/' | 
+          sed -e 's/"//g' -e 's/ /_/g' -e 's/Tcell/T_Cell/g' |
+          awk -v OFS="\\t" '($4=="patient" || $4=="{wildcards.patient}")' |
+          sed -e 's/\\t/,/g' > {output}
+        """
+
+rule split_counts:
+    input:
+        expr="data-raw/scRNA/2020_ji_squamous-cell-carcinoma/GSE144236_cSCC_counts.txt.gz",
+        metadata="data-raw/scRNA/2020_ji_squamous-cell-carcinoma/GSE144236_patient_metadata_new.txt.gz",
+    output:
+        rows=temp('data-raw/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.rows.txt'),
+        expr="data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.counts.csv.gz"
+    shell:
+        """
+        zcat {input.metadata} | 
+          sed -e '1s/^/cell\\t/' | 
+          sed -e 's/"//g' -e 's/ /_/g' -e 's/Tcell/T_Cell/g' |
+          awk '($4=="{wildcards.patient}") {{print NR}}' > {output.rows};
+        first=$(head -n1 {output.rows});
+        last=$(tail -n1 {output.rows});
+        zcat {input.expr} |
+          sed -e '1s/^/gene\\t/' -e '2,3d' | 
+          cut -f 1,$first-$last |
+          sed -e 's/\\t/,/g' -e 's/"//g' |
+          gzip -c > {output.expr}
+        """
+
+rule make_rowData:
+    input:
+        expr="data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.counts.csv.gz"
+    output:
+        "data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.rowData.csv"
+    shell:
+        """
+        zcat {input.expr} |
+          sed -e '1s/gene/gene_name/' |
+          cut -d"," -f1 > {output} 
+        """
+        
+rule make_RDS:
+    input:
+        counts="data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.counts.csv.gz",
+        colData="data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.colData.csv",
+        rowData="data/cleaned/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.rowData.csv",
+    output:
+        rds="data/rds/scRNA/2020_ji_squamous-cell-carcinoma/{patient}.rds"
+    shell:
+        """
+        ./scripts/make_RDS.R \
+            --dataset 2020_ji_squamous-cell-carcinoma \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """

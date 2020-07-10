@@ -4,3 +4,4 @@ data/
 *.nb.html
 .ipynb_checkpoints/
 .Rproj.user
+data-raw/

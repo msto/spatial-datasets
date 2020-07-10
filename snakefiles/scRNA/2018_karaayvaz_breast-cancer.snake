@@ -1,0 +1,72 @@
+
+rule all:
+    input:
+        "data/rds/scRNA/2018_karaayvaz_breast-cancer.rds"
+
+rule download:
+    output:
+        expr="data-raw/scRNA/2018_karaayvaz_breast-cancer/GSE118389_counts_rsem.txt.gz",
+        cell_types="data-raw/scRNA/2018_karaayvaz_breast-cancer/cell_types_tab_S9.txt"
+    shell:
+        """
+        curl -o {output.expr} https://ftp.ncbi.nlm.nih.gov/geo/series/GSE118nnn/GSE118389/suppl/GSE118389%5Fcounts%5Frsem%2Etxt%2Egz;
+        curl -o {output.cell_types} https://raw.githubusercontent.com/Michorlab/tnbc_scrnaseq/master/data/cell_types_tab_S9.txt
+        """
+
+rule format_matrix:
+    input:
+        expr="data-raw/scRNA/2018_karaayvaz_breast-cancer/GSE118389_counts_rsem.txt.gz",
+    output:
+        expr="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/counts_all.csv.gz"
+    shell:
+        """
+        zcat {input} | sed -e 's/"//g' | sed -e '1s/^/gene\\t/' | sed -e 's/\\t/,/g' | gzip -c > {output}
+        """
+
+rule make_colData:
+    input:
+        cell_types="data-raw/scRNA/2018_karaayvaz_breast-cancer/cell_types_tab_S9.txt"
+    output:
+        cell_types="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/colData.csv",
+    shell:
+        """
+        cat {input} | cut -f 2- | sed -e '1d' | sed -e '1i cell\\tcell_type' | sed -e 's/\\t/,/g' > {output}
+        """
+
+# Only 1,112 cells were able to be assigned cell types (see paper.)
+# Remove others
+rule make_counts:
+    input:
+        expr="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/counts_all.csv.gz",
+        cells="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/colData.csv",
+    output:
+        expr="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/counts.csv.gz"
+    run:
+        import pandas as pd
+        counts = pd.read_csv(input.expr, index_col=0)
+        cells = pd.read_csv(input.cells)
+        counts.loc[:, cells.cell].to_csv(output[0], index=True, header=True, compression='gzip')
+
+rule make_rowData:
+    input:
+        expr="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/counts.csv.gz"
+    output:
+        expr="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/rowData.csv"
+    shell:
+        """
+        zcat {input} | cut -d"," -f1 | sed -e '1s/gene/gene_name/' > {output}
+        """
+
+rule make_RDS:
+    input:
+        counts="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/counts.csv.gz",
+        colData="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/colData.csv",
+        rowData="data/cleaned/scRNA/2018_karaayvaz_breast-cancer/rowData.csv",
+    output:
+        rds="data/rds/scRNA/2018_karaayvaz_breast-cancer.rds"
+    shell:
+        """
+        ./scripts/make_RDS.R \
+            --dataset 2018_karaayvaz_breast-cancer \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """

@@ -3,14 +3,12 @@ SAMPLES = ['P4_rep1', 'P4_rep2', 'P6_rep1', 'P6_rep2']
 
 rule all:
     input:
-        expand('data/raw/ji_GSE144239/{sample}_tissue_positions_list.csv.gz', sample=SAMPLES),
-        expand('data/raw/ji_GSE144239/{sample}.counts.csv.gz', sample=SAMPLES),
-        expand("data/cleaned/ji_GSE144239/{sample}.rds", sample=SAMPLES)
+        expand("data/rds/2020_ji_squamous-cell-carcinoma/{sample}.rds", sample=SAMPLES)
 
 rule download:
     output:
-        expr="data/raw/ji_GSE144239/GSE144239_ST_Visium_counts.txt.gz",
-        spatial="data/raw/ji_GSE144239/GSE144239_RAW.tar",
+        expr="data-raw/2020_ji_squamous-cell-carcinoma/GSE144239_ST_Visium_counts.txt.gz",
+        spatial="data-raw/2020_ji_squamous-cell-carcinoma/GSE144239_RAW.tar",
     shell:
         """
         curl -o {output.expr} https://ftp.ncbi.nlm.nih.gov/geo/series/GSE144nnn/GSE144239/suppl/GSE144239%5FST%5FVisium%5Fcounts%2Etxt%2Egz
@@ -19,9 +17,9 @@ rule download:
 
 rule extract:
     input:
-        spatial="data/raw/ji_GSE144239/GSE144239_RAW.tar",
+        spatial="data-raw/2020_ji_squamous-cell-carcinoma/GSE144239_RAW.tar",
     output:
-        expand('data/raw/ji_GSE144239/{sample}_tissue_positions_list.csv.gz', sample=SAMPLES)
+        expand('data-raw/2020_ji_squamous-cell-carcinoma/{sample}_tissue_positions_list.csv.gz', sample=SAMPLES)
     params:
         outdir=lambda wildcards, input: os.path.dirname(input[0])
     shell:
@@ -35,11 +33,11 @@ rule extract:
 
 rule split_counts:
     input:
-        'data/raw/ji_GSE144239/GSE144239_ST_Visium_counts.txt.gz'
+        'data-raw/2020_ji_squamous-cell-carcinoma/GSE144239_ST_Visium_counts.txt.gz'
     output:
-        expand('data/cleaned/ji_GSE144239/{sample}.counts.csv.gz', sample=SAMPLES)
+        expand('data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.counts.csv.gz', sample=SAMPLES)
     params:
-        outdir='data/cleaned/ji_GSE144239/'
+        outdir='data/cleaned/2020_ji_squamous-cell-carcinoma/'
     run:
         import pandas as pd
         df = pd.read_table(input[0])
@@ -53,9 +51,9 @@ rule split_counts:
 
 rule make_rowData:
     input:
-        'data/cleaned/ji_GSE144239/{sample}.counts.csv.gz'
+        'data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.counts.csv.gz'
     output:
-        "data/cleaned/ji_GSE144239/{sample}.rowData.csv"
+        "data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.rowData.csv"
     shell:
         """
         echo "gene_name" > {output};
@@ -64,14 +62,14 @@ rule make_rowData:
 
 rule make_colData:
     input:
-        counts='data/cleaned/ji_GSE144239/{sample}.counts.csv.gz',
-        positions='data/raw/ji_GSE144239/{sample}_tissue_positions_list.csv.gz'
+        counts='data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.counts.csv.gz',
+        positions='data-raw/2020_ji_squamous-cell-carcinoma/{sample}_tissue_positions_list.csv.gz'
     output:
-        "data/cleaned/ji_GSE144239/{sample}.colData.csv"
+        "data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.colData.csv"
     run:
         import pandas as pd
         counts = pd.read_csv(input.counts, index_col=0)
-        names = 'in_tissue row col imagecol imagerow'.split()
+        names = 'in_tissue row col imagerow imagecol'.split()
         positions = pd.read_csv(input.positions, index_col=0, names=names)
         positions = positions.loc[counts.columns].copy()
         positions = positions.reset_index().rename(columns={'index': 'spot'})
@@ -79,13 +77,13 @@ rule make_colData:
 
 rule make_RDS:
     input:
-        counts='data/cleaned/ji_GSE144239/{sample}.counts.csv.gz',
-        rowData="data/cleaned/ji_GSE144239/{sample}.rowData.csv",
-        colData="data/cleaned/ji_GSE144239/{sample}.colData.csv",
+        counts='data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.counts.csv.gz',
+        rowData="data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.rowData.csv",
+        colData="data/cleaned/2020_ji_squamous-cell-carcinoma/{sample}.colData.csv",
     output:
-        rds="data/cleaned/ji_GSE144239/{sample}.rds"
+        rds="data/rds/2020_ji_squamous-cell-carcinoma/{sample}.rds"
     shell:
         """
-        ./scripts/make_RDS.R --sample {wildcards.sample} --dataset ji_GSE144239 \
+        ./scripts/make_RDS.R --sample {wildcards.sample} --dataset 2020_ji_squamous-cell-carcinoma \
             {input.counts} {input.rowData} {input.colData} {output.rds}
         """

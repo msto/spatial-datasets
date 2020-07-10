@@ -44,7 +44,7 @@ make_SCE_from_10X <- function(dirname) {
 #' @param rowData Row data (must include "gene_name" column)
 #' @param colData Column data (must include "spot" column)
 #' @return SingleCellExperiment object
-make_SCE <- function(counts, rowData, colData) {
+make_SCE <- function(counts, rowData, colData, options) {
     # Load cleaned CSVs
     rowData <- read.csv(rowData, stringsAsFactors=FALSE)
     colData <- read.csv(colData, stringsAsFactors=FALSE, row.names=1)
@@ -74,9 +74,17 @@ make_SCE <- function(counts, rowData, colData) {
     # Make count matrix sparse
     counts <- as(counts, "dgCMatrix")
 
-    sce <- SingleCellExperiment(assays=list(counts=counts),
-                                rowData=rowData,
-                                colData=colData)
+    if (options$logcounts) {
+        sce <- SingleCellExperiment(assays=list(logcounts=counts),
+                                    rowData=rowData,
+                                    colData=colData)
+    } else {
+        sce <- SingleCellExperiment(assays=list(counts=counts),
+                                    rowData=rowData,
+                                    colData=colData)
+    }
+
+    sce
 }
 
 add_metadata <- function(sce, options) {
@@ -97,7 +105,8 @@ process_SCE <- function(sce, options) {
     # Use existing defaults until then
 
     # Log-normalized counts
-    sce <- scater::logNormCounts(sce)
+    if (!options$logcounts)
+        sce <- scater::logNormCounts(sce)
     dec <- scran::modelGeneVar(sce)
     top <- scran::getTopHVGs(dec, n=2000)
     sce <- scater::runPCA(sce, subset_row=top, ncomponents=15)
@@ -119,6 +128,7 @@ main <- function() {
     option_list <- list(
         make_option("--sample"),
         make_option("--dataset"),
+        make_option("--logcounts", action="store_true", default=FALSE),
         make_option("--tenX", action="store_true", default=FALSE)
     )
     parser <- OptionParser(usage = "%prog [options] (counts rowData colData | --tenX dirname) RDS",
@@ -131,7 +141,7 @@ main <- function() {
         sce <- make_SCE_from_10X(args[[1]])
         fout <- args[[2]]
     } else {
-        sce <- make_SCE(args[[1]], args[[2]], args[[3]])
+        sce <- make_SCE(args[[1]], args[[2]], args[[3]], options)
         fout <- args[[4]]
     }
     sce <- add_metadata(sce, options)

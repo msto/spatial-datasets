@@ -1,12 +1,12 @@
 
 rule all:
     input:
-        expand("data/raw/10X_breast-cancer/A.{section}/spatial/tissue_positions_list.csv", section=[1, 2])
+        expand("data/rds/2019_10X-demo_breast-cancer/A_{section}.rds", section=[1, 2])
 
 rule download:
     output:
-        expr="data/raw/10X_breast-cancer/A.{section}/filtered_feature_bc_matrix.tar.gz",
-        spatial="data/raw/10X_breast-cancer/A.{section}/spatial.tar.gz",
+        expr="data-raw/2019_10X-demo_breast-cancer/A_{section}/filtered_feature_bc_matrix.tar.gz",
+        spatial="data-raw/2019_10X-demo_breast-cancer/A_{section}/spatial.tar.gz",
     shell:
         """
         curl -o {output.expr} http://cf.10xgenomics.com/samples/spatial-exp/1.0.0/V1_Breast_Cancer_Block_A_Section_{wildcards.section}/V1_Breast_Cancer_Block_A_Section_{wildcards.section}_filtered_feature_bc_matrix.tar.gz
@@ -15,11 +15,11 @@ rule download:
 
 rule extract:
     input:
-        expr="data/raw/10X_breast-cancer/A.{section}/filtered_feature_bc_matrix.tar.gz",
-        spatial="data/raw/10X_breast-cancer/A.{section}/spatial.tar.gz",
+        expr="data-raw/2019_10X-demo_breast-cancer/A_{section}/filtered_feature_bc_matrix.tar.gz",
+        spatial="data-raw/2019_10X-demo_breast-cancer/A_{section}/spatial.tar.gz",
     output:
-        "data/raw/10X_breast-cancer/A.{section}/filtered_feature_bc_matrix/matrix.mtx.gz",
-        "data/raw/10X_breast-cancer/A.{section}/spatial/tissue_positions_list.csv",
+        "data-raw/2019_10X-demo_breast-cancer/A_{section}/filtered_feature_bc_matrix/matrix.mtx.gz",
+        "data-raw/2019_10X-demo_breast-cancer/A_{section}/spatial/tissue_positions_list.csv",
     params:
         outdir=lambda wildcards, input: os.path.dirname(input[0])
     shell:
@@ -27,3 +27,20 @@ rule extract:
         tar -C {params.outdir} -xzf {input.expr};
         tar -C {params.outdir} -xzf {input.spatial};
         """
+
+rule make_RDS:
+    input:
+        "data-raw/2019_10X-demo_breast-cancer/A_{section}/filtered_feature_bc_matrix/matrix.mtx.gz",
+        "data-raw/2019_10X-demo_breast-cancer/A_{section}/spatial/tissue_positions_list.csv"
+    output:
+        rds='data/rds/2019_10X-demo_breast-cancer/A_{section}.rds'
+    params:
+        tenX_dir=lambda wildcards, input: os.path.dirname(os.path.dirname(input[0]))
+    shell:
+        """
+        ./scripts/make_RDS.R \
+            --tenX \
+            --sample A_{wildcards.section} --dataset 2019_10X-demo_breast-cancer \
+            {params.tenX_dir} {output.rds}
+        """
+

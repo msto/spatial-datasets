@@ -1,0 +1,49 @@
+
+SAMPLES = [151507, 151508, 151509, 151510, 151669, 151670, 151671, 151672, 151673, 151674, 151675, 151676]
+
+rule all:
+    input:
+        expand("data/rds/2020_maynard_prefrontal-cortex/{sample}.rds", sample=SAMPLES),
+        expand("data-raw/2020_maynard_prefrontal-cortex/{sample}/filtered_feature_bc_matrix.h5", sample=SAMPLES),
+        expand("data-raw/2020_maynard_prefrontal-cortex/{sample}/spatial/tissue_positions_list.csv", sample=SAMPLES)
+
+rule download_h5:
+    output:
+        "data-raw/2020_maynard_prefrontal-cortex/{sample}/filtered_feature_bc_matrix.h5"
+    shell:
+        """
+        curl -o {output} https://spatial-dlpfc.s3.us-east-2.amazonaws.com/h5/{wildcards.sample}_filtered_feature_bc_matrix.h5
+        """
+
+rule download_spatial_directories:
+    output:
+        zip="data-raw/2020_maynard_prefrontal-cortex/HumanPilot.zip",
+        dir=directory("data-raw/2020_maynard_prefrontal-cortex/HumanPilot-master/")
+    params:
+        outdir=lambda wildacards, input, output: os.path.dirname(output.zip)
+    shell:
+        """
+        wget -O {output.zip} https://github.com/LieberInstitute/HumanPilot/archive/master.zip;
+        unzip -d {params.outdir} {output.zip}
+        """
+
+rule extract_spatial_directories:
+    input:
+        "data-raw/2020_maynard_prefrontal-cortex/HumanPilot-master/"
+    output:
+        locs="data-raw/2020_maynard_prefrontal-cortex/{sample}/spatial/tissue_positions_list.csv"
+    params:
+        outdir=lambda wildacards, input, output: os.path.dirname(output.locs)
+    shell:
+        """
+        cp {input}/10X/{wildcards.sample}/* {params.outdir};
+        cp {params.outdir}/tissue_positions_list.txt {output.locs}
+        """
+
+rule download_SCE:
+    output:
+        "data/rds/2020_maynard_prefrontal-cortex/{sample}.rds"
+    shell:
+        """
+        ./scripts/2020_maynard_prefrontal-cortex/split_SCE.R {wildcards.sample} {output}
+        """

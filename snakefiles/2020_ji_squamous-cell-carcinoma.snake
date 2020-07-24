@@ -1,9 +1,16 @@
 
 SAMPLES = ['P4_rep1', 'P4_rep2', 'P6_rep1', 'P6_rep2']
+GSM_IDS = {
+    'P4_rep1': 'GSM4565823',
+    'P4_rep2': 'GSM4565824',
+    'P6_rep1': 'GSM4565825',
+    'P6_rep2': 'GSM4565826'
+    }
 
 rule all:
     input:
-        expand("data/rds/2020_ji_squamous-cell-carcinoma/{sample}.rds", sample=SAMPLES)
+        expand("data/rds/2020_ji_squamous-cell-carcinoma/{sample}.rds", sample=SAMPLES),
+        expand("data/images/2020_ji_squamous-cell-carcinoma/{sample}.png", sample=SAMPLES)
 
 rule download:
     output:
@@ -86,4 +93,14 @@ rule make_RDS:
         """
         ./scripts/make_RDS.R --sample {wildcards.sample} --dataset 2020_ji_squamous-cell-carcinoma \
             {input.counts} {input.rowData} {input.colData} {output.rds}
+        """
+
+rule copy_image:
+    input:
+        lambda wildcards: 'data-raw/2020_ji_squamous-cell-carcinoma/{0}_{1}_tissue_hires_image.png.gz'.format(GSM_IDS[wildcards.sample], wildcards.sample)
+    output:
+        'data/images/2020_ji_squamous-cell-carcinoma/{sample}.png'
+    shell:
+        """
+        gzip -d -c {input} > {output}
         """

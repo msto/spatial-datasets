@@ -1,0 +1,72 @@
+
+URLS = {
+    'whole_transcriptome': {
+        'expression': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Parent_Visium_Human_OvarianCancer/Parent_Visium_Human_OvarianCancer_filtered_feature_bc_matrix.tar.gz',
+        'spatial': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Parent_Visium_Human_OvarianCancer/Parent_Visium_Human_OvarianCancer_spatial.tar.gz',
+        'image': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Parent_Visium_Human_OvarianCancer/Parent_Visium_Human_OvarianCancer_image.tif'
+    },
+
+    'targeted_immune': {
+        'expression': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Targeted_Visium_Human_OvarianCancer_Immunology/Targeted_Visium_Human_OvarianCancer_Immunology_filtered_feature_bc_matrix.tar.gz',
+        'spatial': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Targeted_Visium_Human_OvarianCancer_Immunology/Targeted_Visium_Human_OvarianCancer_Immunology_spatial.tar.gz',
+        'image': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Targeted_Visium_Human_OvarianCancer_Immunology/Targeted_Visium_Human_OvarianCancer_Immunology_image.tif'
+    },
+
+    'targeted_cancer': {
+        'expression': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Targeted_Visium_Human_OvarianCancer_Pan_Cancer/Targeted_Visium_Human_OvarianCancer_Pan_Cancer_filtered_feature_bc_matrix.tar.gz',
+        'spatial': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Targeted_Visium_Human_OvarianCancer_Pan_Cancer/Targeted_Visium_Human_OvarianCancer_Pan_Cancer_spatial.tar.gz',
+        'image': 'https://cf.10xgenomics.com/samples/spatial-exp/1.2.0/Targeted_Visium_Human_OvarianCancer_Pan_Cancer/Targeted_Visium_Human_OvarianCancer_Pan_Cancer_image.tif'
+    }
+}
+
+
+rule all:
+    input:
+        expand("data/rds/2020_10X-demo_ovarian-cancer/{library}.rds", library=URLS.keys())
+        #expand("data-raw/2020_10X-demo_ovarian-cancer/{library}/spatial/tissue_positions_list.csv", library=URLS.keys())
+        
+
+rule download:
+    output:
+        expr="data-raw/2020_10X-demo_ovarian-cancer/{library}/filtered_feature_bc_matrix.tar.gz",
+        spatial="data-raw/2020_10X-demo_ovarian-cancer/{library}/spatial.tar.gz",
+        image="data-raw/2020_10X-demo_ovarian-cancer/{library}/image.tif",
+    params:
+        expr=lambda wildcards: URLS[wildcards.library]['expression'],
+        spatial=lambda wildcards: URLS[wildcards.library]['spatial'],
+        image=lambda wildcards: URLS[wildcards.library]['image']
+    shell:
+        """
+        curl -o {output.expr} {params.expr}
+        curl -o {output.spatial} {params.spatial}
+        curl -o {output.image} {params.image}
+        """
+
+rule extract:
+    input:
+        expr="data-raw/2020_10X-demo_ovarian-cancer/{library}/filtered_feature_bc_matrix.tar.gz",
+        spatial="data-raw/2020_10X-demo_ovarian-cancer/{library}/spatial.tar.gz",
+    output:
+        "data-raw/2020_10X-demo_ovarian-cancer/{library}/filtered_feature_bc_matrix/matrix.mtx.gz",
+        "data-raw/2020_10X-demo_ovarian-cancer/{library}/spatial/tissue_positions_list.csv",
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        tar -C {params.outdir} -xzf {input.expr};
+        tar -C {params.outdir} -xzf {input.spatial};
+        """
+
+rule make_RDS:
+    input:
+        "data-raw/2020_10X-demo_ovarian-cancer/{library}/filtered_feature_bc_matrix/matrix.mtx.gz",
+        "data-raw/2020_10X-demo_ovarian-cancer/{library}/spatial/tissue_positions_list.csv",
+    output:
+        rds='data/rds/2020_10X-demo_ovarian-cancer/{library}.rds'
+    params:
+        outs_dir=lambda wildcards, input: os.path.dirname(os.path.dirname(input[0]))
+    shell:
+        """
+        ./scripts/preprocess_Visium.R {params.outs_dir} {output.rds}
+        """
+

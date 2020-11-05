@@ -1,0 +1,49 @@
+
+SAMPLES = ['ob', 'cortex_svz']
+
+rule all:
+    input:
+        expand("data/rds/2019_eng_seqfish-plus/{sample}.rds", sample=SAMPLES)
+
+rule download:
+    output:
+        sourcedata="data-raw/2019_eng_seqfish-plus/sourcedata.zip",
+        celltypes="data-raw/2019_eng_seqfish-plus/celltype_annotations.zip",
+    shell:
+        """
+        curl -o {output.sourcedata} https://raw.githubusercontent.com/CaiGroup/seqFISH-PLUS/master/sourcedata.zip
+        curl -o {output.celltypes} https://raw.githubusercontent.com/CaiGroup/seqFISH-PLUS/master/celltype_annotations.zip
+        """
+
+rule extract:
+    input:
+        sourcedata="data-raw/2019_eng_seqfish-plus/sourcedata.zip",
+        celltypes="data-raw/2019_eng_seqfish-plus/celltype_annotations.zip",
+    output:
+        'data-raw/2019_eng_seqfish-plus/sourcedata/cortex_svz_cellcentroids.csv',
+        'data-raw/2019_eng_seqfish-plus/sourcedata/cortex_svz_counts.csv',
+        'data-raw/2019_eng_seqfish-plus/sourcedata/ob_cellcentroids.csv',
+        'data-raw/2019_eng_seqfish-plus/sourcedata/ob_counts.csv',
+        'data-raw/2019_eng_seqfish-plus/cortex_svz_cell_type_annotations.csv',
+        'data-raw/2019_eng_seqfish-plus/ob_cell_type_annotations.csv',
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        unzip -d {params.outdir} {input.sourcedata};
+        unzip -d {params.outdir} {input.celltypes};
+        mv data-raw/2019_eng_seqfish-plus/OB_cell_type_annotations.csv data-raw/2019_eng_seqfish-plus/ob_cell_type_annotations.csv 
+        """
+
+rule make_RDS:
+    input:
+        counts='data-raw/2019_eng_seqfish-plus/sourcedata/{sample}_counts.csv',
+        locations='data-raw/2019_eng_seqfish-plus/sourcedata/{sample}_cellcentroids.csv',
+        annot='data-raw/2019_eng_seqfish-plus/{sample}_cell_type_annotations.csv',
+    output:
+        rds="data/rds/2019_eng_seqfish-plus/{sample}.rds"
+    shell:
+        """
+        ./scripts/2019_eng_seqfish-plus/make_RDS.R \
+            {input.counts} {input.locations} {input.annot} {output.rds}
+        """

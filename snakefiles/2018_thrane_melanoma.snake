@@ -63,5 +63,6 @@ rule make_RDS:
         """
         ./scripts/make_RDS.R \
             --sample {wildcards.sample} --dataset 2018_thrane_melanoma \
+            --platform ST --nPCs 7 \
             {input.counts} {input.rowData} {input.colData} {output.rds}
         """

@@ -1,7 +1,9 @@
 #!/usr/bin/env Rscript
 
 library(optparse)
-suppressMessages(library(SingleCellExperiment))
+suppressMessages({
+    library(BayesSpace)
+})
 
 main <- function() {
     parser <- OptionParser(usage = "%prog [options] sample RDS",
@@ -13,10 +15,7 @@ main <- function() {
     sce <- spatialLIBD::fetch_data(type="sce")
     sce <- sce[, sce$sample_name == sample]
 
-    set.seed(149)
-    dec <- scran::modelGeneVar(sce)
-    top <- scran::getTopHVGs(dec, n=2000)
-    sce <- scater::runPCA(sce, subset_row=top, ncomponents=15)
+    sce <- spatialPreprocess(sce, n.PCs=15, n.HVGs=2000)
 
     saveRDS(sce, args[[2]])
 }

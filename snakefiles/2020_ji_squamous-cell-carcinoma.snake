@@ -84,6 +84,8 @@ rule make_RDS:
         rds="data/rds/2020_ji_squamous-cell-carcinoma/{sample}.rds"
     shell:
         """
-        ./scripts/make_RDS.R --sample {wildcards.sample} --dataset 2020_ji_squamous-cell-carcinoma \
+        ./scripts/make_RDS.R \
+            --sample {wildcards.sample} --dataset 2020_ji_squamous-cell-carcinoma \
+            --platform Visium --nPCs 15 \
             {input.counts} {input.rowData} {input.colData} {output.rds}
         """

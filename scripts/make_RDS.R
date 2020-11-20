@@ -1,9 +1,11 @@
 #!/usr/bin/env Rscript
 
-library(optparse)
-library(Matrix)
-# suppressMessages(library(scater))
-suppressMessages(library(SingleCellExperiment))
+suppressPackageStartupMessages({
+    library(optparse)
+    library(Matrix)
+    library(SingleCellExperiment)
+    library(BayesSpace)
+})
 
 make_SCE_from_10X <- function(dirname) {
     spatial_dir <- file.path(dirname, "spatial")
@@ -97,37 +99,12 @@ add_metadata <- function(sce, options) {
     return(sce)
 }
 
-#' Simple processing of spatial dataset
-#'
-#' Log-normalized counts + denoised PCA
-process_SCE <- function(sce, options) {
-    # TODO: benchmark/parameterize the choices here. 
-    # Use existing defaults until then
-
-    # Log-normalized counts
-    if (!options$logcounts)
-        sce <- scater::logNormCounts(sce)
-    dec <- scran::modelGeneVar(sce)
-    top <- scran::getTopHVGs(dec, n=2000)
-    sce <- scater::runPCA(sce, subset_row=top, ncomponents=15)
-
-    # De-noised PCA
-    # TODO: solve error
-    #   Error in density.default(x, adjust = adjust, from = min(x), to = max(x)) :
-    #   need at least 2 points to select a bandwidth automatically
-    # dec <- scran::modelGeneVarByPoisson(sce)
-    # top <- scran::getTopHVGs(dec, prop=0.1)
-    # sce <- scran::denoisePCA(sce, technical=dec, subset.row=top)
-
-    # Other dimensionality reduction
-    # sce <- scater::runTSNE(sce, dimred="PCA")
-    # sce <- scater::runUMAP(sce, dimred="PCA")
-}
-
 main <- function() {
     option_list <- list(
         make_option("--sample"),
         make_option("--dataset"),
+        make_option("--platform", default="Visium"),
+        make_option("--nPCs", type="integer", default=15),
         make_option("--logcounts", action="store_true", default=FALSE),
         make_option("--tenX", action="store_true", default=FALSE)
     )
@@ -145,7 +122,7 @@ main <- function() {
         fout <- args[[4]]
     }
     sce <- add_metadata(sce, options)
-    sce <- process_SCE(sce, options)
+    sce <- spatialPreprocess(sce, platform=options$platform, n.PCs=options$nPCs)
 
     saveRDS(sce, fout)
 }

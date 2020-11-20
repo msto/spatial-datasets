@@ -1,0 +1,57 @@
+
+SAMPLES = "IDC1 IDC6".split()
+
+rule all:
+    input:
+        #expand("data-raw/2020_10X-internal_DCIS/{sample}", sample=SAMPLES)
+        expand("data/rds/2020_10X-internal_DCIS/{sample}.rds", sample=SAMPLES)
+        
+
+rule download:
+    output:
+        tarball="data-raw/2020_10X-internal_DCIS/IDC_CD3_samples.tar"
+    shell:
+        """
+        curl -o {output.tarball} https://tx.10xgenomics.com/9b3abdefe088b8f6/IDC_CD3_samples.tar
+        """
+
+rule extract:
+    input:
+        tarball="data-raw/2020_10X-internal_DCIS/IDC_CD3_samples.tar"
+    output:
+        directory("data-raw/2020_10X-internal_DCIS/IDC_CD3_samples/"),
+    params:
+        outdir=lambda wildcards, input: os.path.dirname(input[0])
+    shell:
+        """
+        tar -C {params.outdir} -xf {input.tarball};
+        """
+
+IMAGE_NAMES = {
+    'IDC6': '20191212_133642_974__V19B53-011_A2_rotated.tif',
+    'IDC1': '20191212_143436_708__V19B53-010_A2_rotated.tif'
+    }
+
+rule reorganize:
+    input:
+        "data-raw/2020_10X-internal_DCIS/IDC_CD3_samples/",
+    output:
+        directory("data-raw/2020_10X-internal_DCIS/{sample}/")
+    params:
+        image_name=lambda wildcards: IMAGE_NAMES[wildcards.sample]
+    shell:
+        """
+        ./scripts/2020_10X-internal_DCIS/reorganize.sh {input} {output} {wildcards.sample};
+        mv {input}/IDC/{params.image_name} {output}/image.tif
+        """
+
+rule make_RDS:
+    input:
+        directory("data-raw/2020_10X-internal_DCIS/{sample}/"),
+    output:
+        rds='data/rds/2020_10X-internal_DCIS/{sample}.rds'
+    shell:
+        """
+        ./scripts/preprocess_Visium.R {input} {output.rds}
+        """
+

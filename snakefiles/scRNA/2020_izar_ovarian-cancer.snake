@@ -1,0 +1,67 @@
+
+rule all:
+    input:
+        "data/rds/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.rds"
+
+rule download:
+    output:
+        expr="data-raw/scRNA/2020_izar_ovarian-cancer/GSE146026_Izar_HGSOC_ascites_10x_log.tsv.gz",
+    shell:
+        """
+        curl -o {output.expr} ftp://ftp.ncbi.nlm.nih.gov/geo/series/GSE146nnn/GSE146026/suppl/GSE146026%5FIzar%5FHGSOC%5Fascites%5F10x%5Flog%2Etsv%2Egz
+        """
+
+rule make_counts:
+    input:
+        expr="data-raw/scRNA/2020_izar_ovarian-cancer/GSE146026_Izar_HGSOC_ascites_10x_log.tsv.gz",
+    output:
+        expr="data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.counts.csv.gz"
+    shell:
+        """
+        zcat {input.expr} |
+          sed -e '1s/^Cell_ID//' -e '2,8d' -e 's/\\t/,/g' | 
+          gzip -c > {output.expr}
+        """
+
+
+rule make_colData:
+    input:
+        expr="data-raw/scRNA/2020_izar_ovarian-cancer/GSE146026_Izar_HGSOC_ascites_10x_log.tsv.gz",
+    output:
+        "data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.colData.csv"
+    shell:
+        """
+        zcat {input} | 
+            sed -n -e '1,8p' |
+            awk -f scripts/transpose.awk | 
+            sed -e '1s/^Cell_ID/cell/' |
+            awk -f scripts/2020_izar_ovarian-cancer/add_clusters.awk |
+            sed -e 's/\\t/,/g' > {output}
+        """
+
+
+rule make_rowData:
+    input:
+        expr="data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.counts.csv.gz"
+    output:
+        "data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.rowData.csv"
+    shell:
+        """
+        zcat {input.expr} |
+          sed -e '1s/^/gene_name/' |
+          cut -d"," -f1 > {output} 
+        """
+        
+rule make_RDS:
+    input:
+        counts="data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.counts.csv.gz",
+        colData="data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.colData.csv",
+        rowData="data/cleaned/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.rowData.csv",
+    output:
+        rds="data/rds/scRNA/2020_izar_ovarian-cancer/HGSOC_10X.rds"
+    shell:
+        """
+        ./scripts/make_RDS.R \
+            --dataset 2020_izar_ovarian-cancer \
+            {input.counts} {input.rowData} {input.colData} {output.rds}
+        """
